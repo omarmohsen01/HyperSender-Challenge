@@ -25,4 +25,19 @@ enum DriverStatusEnum: string {
     {
         return array_column(self::cases(), 'value');
     }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::ACTIVE => 'success',
+            self::INACTIVE => 'danger',
+            self::ON_LEAVE => 'warning',
+        };
+    }
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn($case) => [$case->value => $case->name()])
+            ->toArray();
+    }
 }

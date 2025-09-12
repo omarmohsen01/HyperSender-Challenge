@@ -29,4 +29,10 @@ enum VehicleTypeEnum: string {
     {
         return array_column(self::cases(), 'value');
     }
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn($case) => [$case->value => $case->name()])
+            ->toArray();
+    }
 }

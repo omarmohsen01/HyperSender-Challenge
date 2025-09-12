@@ -27,4 +27,19 @@ enum VehicleStatusEnum: string {
     {
         return array_column(self::cases(), 'value');
     }
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::AVAILABLE => 'success',
+            self::IN_USE => 'warning',
+            self::MAINTENANCE => 'warning',
+            self::OUT_OF_SERVICE => 'danger',
+        };
+    }
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn($case) => [$case->value => $case->name()])
+            ->toArray();
+    }
 }
