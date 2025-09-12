@@ -33,7 +33,7 @@ use Illuminate\Support\Collection;
 class DriverResource extends Resource
 {
     protected static ?string $model = Driver::class;
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static ?string $navigationIcon = 'heroicon-o-user-circle';
     protected static ?string $navigationGroup = 'Fleet Management';
     protected static ?int $navigationSort = 1;
 
