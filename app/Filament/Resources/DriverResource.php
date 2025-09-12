@@ -308,4 +308,9 @@ class DriverResource extends Resource
     {
         return static::getModel()::count();
     }
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['company']);
+    }
 }

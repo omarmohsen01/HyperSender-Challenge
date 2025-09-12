@@ -27,4 +27,19 @@ enum TripStatusEnum: string {
     {
         return array_column(self::cases(), 'value');
     }
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::SCHEDULED => 'primary',
+            self::IN_PROGRESS => 'warning',
+            self::COMPLETED => 'success',
+            self::CANCELLED => 'danger',
+        };
+    }
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn($case) => [$case->value => $case->name()])
+            ->toArray();
+    }
 }
