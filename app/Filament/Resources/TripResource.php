@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TripResource\Pages;
 use App\Filament\Resources\TripResource\RelationManagers;
 use App\Models\Trip;
+use App\Rules\NoOverlappingTrips;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -121,12 +122,34 @@ class TripResource extends Resource
 
             DateTimePicker::make('schedule_start')
                 ->label('Schedule Start')
-                ->required(),
+                ->required()
+                ->live()
+                ->afterStateUpdated(function (Get $get, Set $set) {
+                    // Clear validation when schedule start changes
+                    $set('schedule_end', null);
+                }),
 
             DateTimePicker::make('schedule_end')
                 ->label('Schedule End')
                 ->rule('after:schedule_start')
-                ->required(),
+                ->required()
+                ->live()
+                ->rules([
+                    function (Get $get) {
+                        return function (string $attribute, $value, \Closure $fail) use ($get) {
+                            $driverId = $get('driver_id');
+                            $vehicleId = $get('vehicle_id');
+                            $scheduleStart = $get('schedule_start');
+                            $scheduleEnd = $value;
+                            $tripId = $get('id'); // For editing existing trips
+
+                            if ($driverId && $vehicleId && $scheduleStart && $scheduleEnd) {
+                                $rule = new NoOverlappingTrips($driverId,$vehicleId,$scheduleStart,$scheduleEnd,$tripId);
+                                $rule->validate($attribute, $value, $fail);
+                            }
+                        };
+                    }
+                ]),
 
             DateTimePicker::make('actual_start')
                 ->label('Actual Start')
@@ -150,9 +173,9 @@ class TripResource extends Resource
                 ->label('Route')
                 ->formatStateUsing(fn($state, $record) =>
                     "<div>
-                        <span class='font-medium'>" . $record->origin . "</span>
+                        <span class='font-medium'>" . \Illuminate\Support\Str::limit($record->origin, 30) . "</span>
                         <br>
-                        <span class='text-gray-500'>→ " . $record->destination . "</span>
+                        <span class='text-gray-500'>→ " . \Illuminate\Support\Str::limit($record->destination, 30) . "</span>
                     </div>"
                 )
                 ->html()
