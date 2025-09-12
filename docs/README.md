@@ -4,7 +4,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/trip-management.git
+   git clone https://github.com/omarmohsen01/HyperSender-Challenge.git
    cd trip-management
    ```
 
