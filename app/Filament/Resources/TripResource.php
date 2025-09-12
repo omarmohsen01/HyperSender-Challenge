@@ -191,7 +191,7 @@ class TripResource extends Resource
                 ->label('Company')
                 ->searchable()
                 ->sortable()
-                ->limit(30)
+                ->limit(20)
                 ->tooltip(fn($record) => $record->company?->name)
                 ->toggleable(),
 
@@ -222,6 +222,12 @@ class TripResource extends Resource
                 ->html()
                 ->sortable()
                 ->toggleable(),
+
+            TextColumn::make('duration')
+                ->label('Duration')
+                ->formatStateUsing(fn ($state, $record) => formatDuration($record->schedule_start, $record->schedule_end))
+                ->toggleable(),
+
 
             TextColumn::make('actual_start')
                 ->label('Actual')
