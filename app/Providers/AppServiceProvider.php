@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Interfaces\TripOverlapInterface;
 use App\Models\Trip;
 use App\Observers\TripObserver;
+use App\Services\TripOverlapService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -13,7 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(TripOverlapInterface::class, TripOverlapService::class);
     }
 
     /**

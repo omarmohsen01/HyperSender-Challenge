@@ -2,13 +2,26 @@
 
 namespace App\Observers;
 
+use App\Interfaces\TripOverlapInterface;
 use App\Models\Trip;
 use Carbon\Carbon;
 
 class TripObserver
 {
     public function creating(Trip $trip){
-        return $trip->trip_number=$this->getNextTripNumber($trip);
+        // Assign next trip number
+        $trip->trip_number=$this->getNextTripNumber($trip);
+
+        // Validate no overlaps for new trips
+        $overlapService = app(TripOverlapInterface::class);
+        $overlapService->validateNoOverlappingTrips($trip);
+    }
+    public function updating(Trip $trip)
+    {
+        // Validate no overlaps when updating, excluding current trip id
+        /** @var TripOverlapInterface $overlapService */
+        $overlapService = app(TripOverlapInterface::class);
+        $overlapService->validateNoOverlappingTrips($trip);
     }
     private function getNextTripNumber($trip): string
     {
