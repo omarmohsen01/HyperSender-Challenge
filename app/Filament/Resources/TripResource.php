@@ -2,14 +2,14 @@
 
 namespace App\Filament\Resources;
 
-use App\Enums\VehicleStatusEnum;
-use App\Enums\VehicleTypeEnum;
-use App\Filament\Resources\VehicleResource\Pages;
-use App\Filament\Resources\VehicleResource\RelationManagers;
-use App\Models\Vehicle;
+use App\Filament\Resources\TripResource\Pages;
+use App\Filament\Resources\TripResource\RelationManagers;
+use App\Models\Trip;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
+use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Actions\Action;
@@ -28,20 +28,21 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Collection;
+use App\Enums\TripStatusEnum;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Set;
 
-class VehicleResource extends Resource
+class TripResource extends Resource
 {
-    protected static ?string $model = Vehicle::class;
+    protected static ?string $model = Trip::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'Fleet Management';
-    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Section::make('Vehicle Information')
-                ->schema(self::getVehicleFormFields())
+            Section::make('Trip Information')
+                ->schema(self::getTripFormFields())
                 ->columns(2),
         ]);
     }
@@ -56,76 +57,112 @@ class VehicleResource extends Resource
             ->defaultSort('created_at', 'desc');
     }
 
-    private static function getVehicleFormFields(): array
+    private static function getTripFormFields(): array
     {
         return [
-            TextInput::make('license_plate')
-                ->label('License Plate')
+            TextInput::make('origin')
+                ->label('Origin')
                 ->required()
-                ->maxLength(20)
-                ->autocapitalize('characters')
-                ->unique(ignoreRecord: true),
+                ->maxLength(100),
 
-            TextInput::make('model')
-                ->label('Model')
+            TextInput::make('destination')
+                ->label('Destination')
                 ->required()
-                ->maxLength(50)
-                ->unique(ignoreRecord: true)
-                ->alphaNum(),
+                ->maxLength(100),
 
-            TextInput::make('year')
-                ->label('Year')
+            Select::make('company_id')
+                ->label('Company')
+                ->relationship('company', 'name')
+                ->searchable()
                 ->required()
-                ->numeric()
-                ->minValue(1900)
-                ->maxValue(date('Y') + 1)
-                ->rules(['digits:4']),
+                ->live()
+                ->afterStateUpdated(function (Set $set) {
+                    $set('driver_id', null);
+                    $set('vehicle_id', null);
+                }),
 
-            TextInput::make('capacity')
-                ->label('Capacity')
+            Select::make('vehicle_id')
+                ->label('Vehicle')
+                ->relationship(
+                    name: 'vehicle',
+                    titleAttribute: 'license_plate',
+                    modifyQueryUsing: fn (Builder $query, Get $get) =>
+                        $query->when(
+                            $get('company_id'),
+                            fn (Builder $query, $companyId) => $query->where('company_id', $companyId)
+                        )
+                )
+                ->searchable()
                 ->required()
-                ->numeric()
-                ->minValue(1)
-                ->maxValue(10000),
+                ->disabled(fn (Get $get): bool => !$get('company_id'))
+                ->placeholder('Select a company first'),
 
-            self::getCompanySelectField(),
+            Select::make('driver_id')
+                ->label('Driver')
+                ->relationship(
+                    name: 'driver',
+                    titleAttribute: 'name',
+                    modifyQueryUsing: fn (Builder $query, Get $get) =>
+                        $query->when(
+                            $get('company_id'),
+                            fn (Builder $query, $companyId) => $query->where('company_id', $companyId)
+                        )
+                )
+                ->searchable()
+                ->required()
+                ->disabled(fn (Get $get): bool => !$get('company_id'))
+                ->placeholder('Select a company first'),
 
             Select::make('status')
                 ->label('Status')
-                ->options(VehicleStatusEnum::getOptions())
-                ->default(VehicleStatusEnum::AVAILABLE)
+                ->options(TripStatusEnum::getOptions())
+                ->default(TripStatusEnum::SCHEDULED)
                 ->required(),
 
-            Select::make('type')
-                ->label('Type')
-                ->options(VehicleTypeEnum::getOptions())
+            DateTimePicker::make('schedule_start')
+                ->label('Schedule Start')
                 ->required(),
+
+            DateTimePicker::make('schedule_end')
+                ->label('Schedule End')
+                ->rule('after:schedule_start')
+                ->required(),
+
+            DateTimePicker::make('actual_start')
+                ->label('Actual Start')
+                ->nullable(),
+
+            DateTimePicker::make('actual_end')
+                ->label('Actual End')
+                ->rule('after:actual_start')
+                ->nullable(),
         ];
     }
-
     private static function getTableColumns(): array
     {
         return [
-            TextColumn::make('license_plate')
-                ->label('License Plate')
+            TextColumn::make('trip_number')
+                ->label('Trip Number')
                 ->copyable()
                 ->toggleable(),
 
-            TextColumn::make('model')
-                ->label('Model')
+            TextColumn::make('origin')
+                ->label('Route')
                 ->formatStateUsing(fn($state, $record) =>
-                    "{$state}\n<span class='text-xs text-gray-500'>Year: {$record->year}</span>"
+                    "<div>
+                        <span class='font-medium'>" . $record->origin . "</span>
+                        <br>
+                        <span class='text-gray-500'>→ " . $record->destination . "</span>
+                    </div>"
                 )
                 ->html()
-                ->searchable()
+                ->searchable(query: function ($query, $search) {
+                    return $query->where('origin', 'like', "%{$search}%")
+                                 ->orWhere('destination', 'like', "%{$search}%");
+                })
                 ->copyable()
                 ->toggleable(),
 
-            TextColumn::make('capacity')
-                ->label('Capacity')
-                ->searchable()
-                ->copyable()
-                ->toggleable(),
 
             TextColumn::make('company.name')
                 ->label('Company')
@@ -135,19 +172,52 @@ class VehicleResource extends Resource
                 ->tooltip(fn($record) => $record->company?->name)
                 ->toggleable(),
 
+            TextColumn::make('vehicle.license_plate')
+                ->label('Vehicle')
+                ->searchable()
+                ->sortable()
+                ->limit(30)
+                ->tooltip(fn($record) => $record->vehicle?->license_plate)
+                ->toggleable(),
+
+            TextColumn::make('driver.name')
+                ->label('Driver')
+                ->searchable()
+                ->sortable()
+                ->limit(30)
+                ->tooltip(fn($record) => $record->driver?->name)
+                ->toggleable(),
+
+            TextColumn::make('schedule_start')
+                ->label('Schedule')
+                ->formatStateUsing(fn($state, $record) =>
+                    "<div>
+                        <span class='font-medium'>Start:</span> " . $record->schedule_start?->format('M j, Y H:i') . "<br>
+                        <span class='font-medium'>End:</span> " . $record->schedule_end?->format('M j, Y H:i') . "
+                    </div>"
+                )
+                ->html()
+                ->sortable()
+                ->toggleable(),
+
+            TextColumn::make('actual_start')
+                ->label('Actual')
+                ->formatStateUsing(fn($state, $record) =>
+                    "<div>
+                        <span class='font-medium'>Start:</span> " . $record->actual_start?->format('M j, Y H:i') . "<br>
+                        <span class='font-medium'>End:</span> " . $record->actual_end?->format('M j, Y H:i') . "
+                    </div>"
+                )
+                ->html()
+                ->sortable()
+                ->toggleable(),
+
             TextColumn::make('status')
                 ->label('Status')
                 ->searchable()
                 ->sortable()
                 ->badge()
-                ->color(fn(VehicleStatusEnum $state) => $state->getColor())
-                ->formatStateUsing(fn($state) => $state->name()),
-
-            TextColumn::make('type')
-                ->label('Type')
-                ->searchable()
-                ->sortable()
-                ->badge()
+                ->color(fn(TripStatusEnum $state) => $state->getColor())
                 ->formatStateUsing(fn($state) => $state->name()),
 
             TextColumn::make('created_at')
@@ -158,19 +228,12 @@ class VehicleResource extends Resource
                 ->toggleable(),
         ];
     }
-
-
     private static function getTableFilters(): array
     {
         return [
             SelectFilter::make('status')
                 ->label('Status')
-                ->options(VehicleStatusEnum::getOptions())
-                ->multiple(),
-
-            SelectFilter::make('type')
-                ->label('Type')
-                ->options(VehicleTypeEnum::getOptions())
+                ->options(TripStatusEnum::getOptions())
                 ->multiple(),
 
             SelectFilter::make('company_id')
@@ -199,7 +262,6 @@ class VehicleResource extends Resource
                 }),
         ];
     }
-
     private static function getTableActions(): array
     {
         return [
@@ -211,7 +273,6 @@ class VehicleResource extends Resource
             ])
         ];
     }
-
     private static function getUpdateStatusAction(): Action
     {
         return Action::make('updateStatus')
@@ -221,23 +282,22 @@ class VehicleResource extends Resource
                 Forms\Components\Select::make('status')
                     ->label('Status')
                     ->options([
-                        VehicleStatusEnum::AVAILABLE->value => 'Available',
-                        VehicleStatusEnum::IN_USE->value => 'In Use',
-                        VehicleStatusEnum::MAINTENANCE->value => 'Maintenance',
-                        VehicleStatusEnum::OUT_OF_SERVICE->value => 'Out Of Service',
+                        TripStatusEnum::SCHEDULED->value => 'Scheduled',
+                        TripStatusEnum::IN_PROGRESS->value => 'In Progress',
+                        TripStatusEnum::COMPLETED->value => 'Completed',
+                        TripStatusEnum::CANCELLED->value => 'Cancelled',
                     ])
                     ->required(),
             ])
-            ->action(function (Vehicle $record, array $data): void {
+            ->action(function (Trip $record, array $data): void {
                 $record->update([
                     'status' => $data['status'],
                 ]);
             })
             ->color('secondary')
-            ->modalHeading('Update Vehicle Status')
+            ->modalHeading('Update Trip Status')
             ->modalSubmitActionLabel('Save');
     }
-
     private static function getBulkActions(): array
     {
         return [
@@ -251,7 +311,7 @@ class VehicleResource extends Resource
                     ->form([
                         Select::make('status')
                             ->label('New Status')
-                            ->options(VehicleStatusEnum::getOptions())
+                            ->options(TripStatusEnum::getOptions())
                             ->required(),
                     ])
                     ->action(function (Collection $records, array $data): void {
@@ -259,7 +319,7 @@ class VehicleResource extends Resource
 
                         Notification::make()
                             ->title('Bulk Status Update')
-                            ->body("{$records->count()} Vehicles updated successfully")
+                            ->body("{$records->count()} Trips updated successfully")
                             ->success()
                             ->send();
                     }),
@@ -313,18 +373,14 @@ class VehicleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListVehicles::route('/'),
-            'create' => Pages\CreateVehicle::route('/create'),
-            'edit' => Pages\EditVehicle::route('/{record}/edit'),
+            'index' => Pages\ListTrips::route('/'),
+            'create' => Pages\CreateTrip::route('/create'),
+            'edit' => Pages\EditTrip::route('/{record}/edit'),
         ];
-    }
-    public static function getNavigationBadge(): ?string
-    {
-        return static::getModel()::count();
     }
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['company']);
+            ->with(['company', 'vehicle', 'driver']);
     }
 }
