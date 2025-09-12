@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Interfaces\TripOverlapInterface;
 use App\Models\Trip;
+use App\Helpers\CacheHelper;
 use Carbon\Carbon;
 
 class TripObserver
@@ -16,12 +17,31 @@ class TripObserver
         $overlapService = app(TripOverlapInterface::class);
         $overlapService->validateNoOverlappingTrips($trip);
     }
+
+    public function created(Trip $trip)
+    {
+        // Clear dashboard caches when new trip is created
+        CacheHelper::clearTripRelatedCaches();
+    }
+
     public function updating(Trip $trip)
     {
         // Validate no overlaps when updating, excluding current trip id
         /** @var TripOverlapInterface $overlapService */
         $overlapService = app(TripOverlapInterface::class);
         $overlapService->validateNoOverlappingTrips($trip);
+    }
+
+    public function updated(Trip $trip)
+    {
+        // Clear dashboard caches when trip is updated
+        CacheHelper::clearTripRelatedCaches();
+    }
+
+    public function deleted(Trip $trip)
+    {
+        // Clear dashboard caches when trip is deleted
+        CacheHelper::clearTripRelatedCaches();
     }
     private function getNextTripNumber($trip): string
     {
