@@ -16,16 +16,14 @@ class NoOverlappingTrips implements ValidationRule
     protected $excludeTripId;
     protected $scheduleStart;
     protected $scheduleEnd;
-    protected TripOverlapInterface $tripOverlapService;
 
-    public function __construct($driverId, $vehicleId, $scheduleStart, $scheduleEnd, $excludeTripId = null, TripOverlapInterface $tripOverlapService)
+    public function __construct($driverId, $vehicleId, $scheduleStart, $scheduleEnd, $excludeTripId = null)
     {
         $this->driverId = $driverId;
         $this->vehicleId = $vehicleId;
         $this->scheduleStart = $scheduleStart;
         $this->scheduleEnd = $scheduleEnd;
         $this->excludeTripId = $excludeTripId;
-        $this->tripOverlapService = $tripOverlapService;
     }
 
     /**
@@ -46,8 +44,9 @@ class NoOverlappingTrips implements ValidationRule
             $fail('The schedule start time must be before the schedule end time.');
             return;
         }
+        $tripOverlapService = app(TripOverlapInterface::class);
 
-        $overlappingTrips = $this->tripOverlapService->getOverlappingTrips(
+        $overlappingTrips = $tripOverlapService->getOverlappingTrips(
             $start,
             $end,
             $this->driverId,
