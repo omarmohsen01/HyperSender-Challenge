@@ -11,7 +11,6 @@ interface TripOverlapInterface
     /**
      * Validate that there are no overlapping trips for the same driver or vehicle
      *
-     * @throws TripOverlapException
      */
     public function validateNoOverlappingTrips(Trip $trip): void;
      /**
