@@ -1,61 +1,100 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🚖 Trip Management Challenge
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 📦 Setup Instructions
 
-## About Laravel
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/omarmohsen01/HyperSender-Challenge.git
+   cd trip-management
+   ```
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+2. **Install dependencies**
+   ```bash
+   composer install
+   npm install && npm run build
+   ```
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+3. **Copy and configure environment file**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+   - Update your `.env` with database credentials.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+4. **Run migrations & seeders**
+   ```bash
+   php artisan migrate --seed
+   ```
 
-## Learning Laravel
+5. **Start development server**
+   ```bash
+   php artisan serve
+   ```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 🧩 Key Design Decisions
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 1. Overlapping Trip Validation
+- Business logic requires **drivers and vehicles cannot be double-booked**.
+- Validation runs inside the **Eloquent model observer** (`TripObserver::creating` / `TripObserver::updating`) to ensure consistency across UI, API, and seeding.
+- Overlap check uses this query:
 
-## Laravel Sponsors
+```php
+$query = Trip::where('id', '!=', $this->id)
+    ->where(function ($q) {
+        $q->where('driver_id', $this->driver_id)
+          ->orWhere('vehicle_id', $this->vehicle_id);
+    })
+    ->where('status', '!=', TripStatusEnum::CANCELLED->value)
+    ->where(function ($q) {
+        $q->whereBetween('schedule_start', [$this->schedule_start, $this->schedule_end])
+          ->orWhereBetween('schedule_end', [$this->schedule_start, $this->schedule_end])
+          ->orWhere(function ($subQ) {
+              $subQ->where('schedule_start', '<=', $this->schedule_start)
+                   ->where('schedule_end', '>=', $this->schedule_end);
+          });
+    });
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- The **third condition (subquery)** is required to catch cases where an existing trip fully contains the new trip’s window.
+- This ensures *all overlap cases* are covered.
 
-### Premium Partners
+✅ **Performance considerations**
+- Indexed columns: `driver_id`, `vehicle_id`, `schedule_start`, `schedule_end`.
+- The overlap check is selective (driver/vehicle filter first), so queries scale with indexed lookups rather than scanning the entire trips table.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+### 2. Duration Formatting
+- Implemented as a **model accessor** (`getDurationLabelAttribute`) instead of inline logic in Filament.
+- Keeps UI clean and allows reusability in exports, APIs, etc.
+- Format example: `2h 30m`, `45m`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+### 3. Validation Layer
+- Used **Form validation** (Filament) for user input errors (end before start).
+- Used **Observer validation** for business logic (overlapping trips).
+- This separation keeps UI validation fast while ensuring system-wide consistency.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## 🤔 Assumptions
+- A trip is only considered conflicting if **status ≠ CANCELLED**.
+- `schedule_start` and `schedule_end` are always stored as **UTC datetimes**.
+- Only **drivers** and **vehicles** matter for overlap checks; passengers are not part of conflict validation.
+- Trip duration is always derived from schedule times (not actual start/end).
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
 
-## License
+## 🧪 Running Tests
+Feature and unit tests cover:
+- Trip creation with valid schedules.
+- Preventing overlaps.
+- Duration formatting.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Run tests:
+```bash
+php artisan test
+```
